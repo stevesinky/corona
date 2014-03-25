@@ -1,10 +1,11 @@
+local utility = require ("utility")
 
 -- constants
 W = display.contentWidth
 H = display.contentHeight
 Cx = W * 0.5
 Cy = H * 0.5
-scaler = 0.45
+scaler = 0.5
 radius = 64
 
 local physics = require("physics")
@@ -13,12 +14,13 @@ physics.setGravity( 0, 0 )
 --physics.setDrawMode( "hybrid" )
 
 display.setStatusBar( display.HiddenStatusBar )
-display.setDefault( "background", 1, 1, 1 )
+local background = display.newImageRect("background.png", 1080, 1920)
+utility.putInCentre(background)
 
 -- setup variables across game
 local start = true
 local level = 1
-local dof = 8
+local dof = 4
 local numberToScore = 3
 local targetLeft = 0 --used for when a ball becomes central mid turn, can then inherit this tagert
 
@@ -28,6 +30,8 @@ score = display.newText( scoreTotal, 0, 0, native.systemFontBold, 28 )
 score:setTextColor( 40, 40, 40, 0 )
 score.x = 20; score.y = 20
 
+local lowAlpha = 0.05
+
 local function updateScores()
 	score.text = scoreTotal
 end
@@ -35,7 +39,7 @@ end
 freeBalls = {}
 centreBalls = {}
 local ballBody = { density=2.0, friction=10.0, bounce=0.1, radius=radius * scaler }
-local ballColours = { "black", "blue", "red", "green", "gold", "black", "blue", "red", "green" }
+local ballColours = { "black", "blue", "red", "green", "gold", "blue", "gold", "red", "green" }
 
 function getAngle( ball )
 	local arcx = ball.x - Cx
@@ -54,7 +58,9 @@ function newBall( i )
 	local ball = display.newImage( "ball_" .. ballColours[i] .. ".png" )
 	ball:scale( scaler, scaler )
 	ball.id = "ball" -- store object type as string attribute
-	ball.colour = ballColours[i] -- store ball colour as string attribute 
+	ball.colour = ballColours[i] -- store ball colour as string attribute
+	ball.alpha = 1
+	ball.remove = 0 
 	return ball
 end
 
@@ -65,9 +71,9 @@ function newFreeBall()
 	end
 	local freeBall = newBall( freeNo )
 	freeBall.x = math.random(Cx * 0.75, Cy * 1.25)
-	freeBall.y = 0
+	freeBall.y = -8
 	physics.addBody( freeBall, ballBody )
-	freeBall:applyLinearImpulse( 0, 25.0, freeBall.x, freeBall.y )
+	freeBall:applyLinearImpulse( 0, 35.0, freeBall.x, freeBall.y )
 	freeBalls[freeNo] = freeBall	
 end
 
@@ -85,25 +91,39 @@ for i = 1, startCentreSize do
 end
 
 function gameOver()
-	local overSplash = display.newImage( "game_over.png", true )
-	local showGameOver = transition.to( overSplash, { alpha=1.0, xScale=1.0, yScale=1.0, time=500 } )
+	start = false
+	local gameOver = display.newImage( "game_over.png", false )
+	utility.putInCentre(gameOver)
 end
 
 function isGameOver()
 	-- check all obeject in centre group
+	for i = 1, #centreBalls do
+		if (centreBalls[i].x < 0) then
+			return true
+		end
+		if (centreBalls[i].x > W) then
+			return true
+		end
+		if (centreBalls[i].y < 0) then
+			return true
+		end
+		if (centreBalls[i].y > H) then
+			return true
+		end
+	end
     return false
 end
 
 function cleanUpBalls()
+	--if way off screen, remove image/physics
 end
 
-function ballIsTouchingAndSameColour(ball1, ball2)
-	if (centreBalls[i] ~=  ballToAdd) then
-		local dx = math.abs(ball1.x - ball2.x)
-		local dy = math.abs(ball1.y - ball2.y)
-		local dr = math.sqrt( (dx ^ 2) + (dy ^ 2) )
-		if (dr <= radius * 2 * scaler) then
-			if (ball1.colour == ball2.colour) then
+
+function ballsAreTheSame(ball1, ball2)
+	if (ball1.colour == ball2.colour) then
+		if (ball1.x == ball2.x) then
+			if (ball1.y == ball2.y) then
 				return true
 			end
 		end
@@ -111,119 +131,70 @@ function ballIsTouchingAndSameColour(ball1, ball2)
 	return false
 end
 
-function elementNotInTable(element, table)
-	for i=1, #table do
-		if (table[i] == element) then
-			return false
-		end
+function removeBalls(balls)
+	--print("attempting to remove " .. #balls .. " balls")
+	for i = 1, #balls do
+		transition.to(balls[i], {time=300, alpha=lowAlpha})
 	end
-	return true
 end
 
-function ballArrayToRemove(ballsToRemove, ballsToSearch)
-	local ballsToRemoveOutOfLoop = {}
-	print("ballsToRemove: " .. #ballsToRemove )
-	print("ballsToSearch: " .. #ballsToRemove )
-	for i=1, #ballsToRemove do
-		ballsToRemoveOutOfLoop[#ballsToRemoveOutOfLoop + 1] = ballsToRemove[i]
-		for j=1, #ballsToSearch do
-			if (elementNotInTable(ballsToSearch[j], ballsToRemoveOutOfLoop)) then
-				if (ballIsTouchingAndSameColour(ballsToSearch[j],ballsToRemove[i])) then
-					ballsToRemoveOutOfLoop[#ballsToRemoveOutOfLoop + 1] = ballsToSearch[j]
-					local removalArray = ballArrayToRemove(ballsToRemoveOutOfLoop, ballsToSearch)
-					for k=1, #removalArray do
-						ballsToRemoveOutOfLoop[#ballsToRemoveOutOfLoop + 1] = removalArray[k]
-					end
-				end
+local function ballIsTouchingAndSameColour(ball1, ball2)
+	if (ball1.colour == ball2.colour) then
+		--print("balls are same colour:" .. ball1.colour)
+		local dx = math.abs(ball1.x - ball2.x)
+		local dy = math.abs(ball1.y - ball2.y)
+		local tolerance = (radius * 2 * scaler)
+		--print("dx="..dx.." dy="..dy.." tol="..tolerance)
+		if (dx <= tolerance) then
+			if (dy <= tolerance) then
+				--print("balls are next to each other")
+				return true
 			end
 		end
 	end
-	print("ballsToRemoveOutOfLoop: " .. #ballsToRemoveOutOfLoop )
-	return ballsToRemoveOutOfLoop
+	return false
 end
 
-function ballToRemove(ballsToRemove)
-	-- get all the balls to remove from the recursive search
-	local ballsToRemove = ballArrayToRemove(ballsToRemove, centreBalls)
-	for i=1, #ballsToRemove do
-		-- remove the object
-		--ballsToRemove[i]:removeSelf()
-		display.remove( ballsToRemove[i] )
-		ballsToRemove[i] = nil
-		physics.removeBody( ballsToRemove )	
+local function isNewRemoval( ball, alreadyTouchingAndThisColour )
+	for i=1, #alreadyTouchingAndThisColour do
+		if (ballsAreTheSame(ball, alreadyTouchingAndThisColour[i])) then
+			return false
+		end
 	end
-	-- remove from centreballs
+	for i=1, #alreadyTouchingAndThisColour do
+		if (ballIsTouchingAndSameColour(ball, alreadyTouchingAndThisColour[i])) then
+			return true
+		end
+	end
+	return false	
 end
 
-local tPrevious = system.getTimer()
-local tComplexPrevious = system.getTimer()
-local tLastNewBall = system.getTimer()
-
-function animate( event )
-
-	local tDelta = event.time - tPrevious
-	tPrevious = event.time
-
-	if (start) then
-		-- wait until start splash screen is done
-		tPrevious = event.time
-		tComplexPrevious = event.time
-		return true
-	end
-
-	local oneAngle = 360 / dof
-		
+local function searchCentreForNew( alreadyTouchingAndThisColour )
+	--print ("searchCentreForNew with arraySize: " .. #alreadyTouchingAndThisColour .. " centreSize: ".. #centreBalls)
 	for i=1, #centreBalls do
-		centreBalls[i]:setLinearVelocity(0, 0)
-		local move = centreBalls[i].currentAngle + ((tDelta * 0.004 * oneAngle))
-		if (move > centreBalls[i].targetAngle) then
-			move = centreBalls[i].targetAngle
-		end
-	
-		local xV = Cx - centreBalls[i].x
-		local yV = Cy - centreBalls[i].y
-		local radiusFromCentre =  math.sqrt( (xV ^ 2) + (yV ^ 2) )
-		centreBalls[i].x = (Cx)  + math.cos(math.rad(move)) * radiusFromCentre 
-		centreBalls[i].y = (Cy)  + math.sin(math.rad(move)) * radiusFromCentre
-		centreBalls[i].rotation = move
-		centreBalls[i].currentAngle = move
-		centreBalls[i]:setLinearVelocity( xV * 0.05 ,  yV * 0.05 ) -- bit of force to centre
-		targetLeft = centreBalls[i].targetAngle - centreBalls[i].currentAngle
-    end
-
-	-- only do this periodically as intensive
-	if ( event.time - tComplexPrevious > (100) ) then
-		tComplexPrevious = event.time
-
-		for i=1, #centreBalls do
-			local xV = Cx - centreBalls[i].x
-			local yV = Cy - centreBalls[i].y
-			local distanceSq = xV + yV 
-			local force = 10 / distanceSq
-		end
-
-		if ( event.time - tLastNewBall > (2000 + (1000 * level)) ) then
-			tLastNewBall = event.time
-			--new ball please
-			newFreeBall()
-			-- cleanup freeballs that are off screen
-			cleanUpBalls()
-		end
-
-		-- check game over
-		if (isGameOver()) then
-			gameOver()
-		end
+		if (isNewRemoval(centreBalls[i], alreadyTouchingAndThisColour)) then
+			alreadyTouchingAndThisColour[#alreadyTouchingAndThisColour + 1] = centreBalls[i]
+			alreadyTouchingAndThisColour = searchCentreForNew( alreadyTouchingAndThisColour )		
+		end	
 	end
+	return alreadyTouchingAndThisColour
 end
 
+local function startSearch( ball1, ball2 )
+	local touchingAndThisColour = {}
+	touchingAndThisColour[1] = ball1
+	touchingAndThisColour[2] = ball2
+	local ballsToRemove = searchCentreForNew(touchingAndThisColour)
+	if (#ballsToRemove >= numberToScore) then
+		timer.performWithDelay(1, removeBalls(ballsToRemove), 1)	
+	end	
+end
 
 local function addToCenter( ballToAdd )
 	setBallCurrentAngle( ballToAdd )
 	ballToAdd.targetAngle = ballToAdd.currentAngle + targetLeft
 	centreBalls[#centreBalls + 1] = ballToAdd
 	ballsToAdd = {ballsToAdd}
-	timer.performWithDelay(1, ballToRemove(ballsToAdd), 1)
 end
 
 local function joinBalls( object1, object2 )
@@ -241,11 +212,15 @@ local function joinBalls( object1, object2 )
 		end
 	end
 	if (found1 == false) then
-		timer.performWithDelay(1, addToCenter(object1), 1)
+		addToCenter(object1)
 	end
 		
 	if (found2 == false) then
-		timer.performWithDelay(1, addToCenter(object2), 1)
+		addToCenter(object2)
+	end
+	if (object1.colour == object2.colour) then
+		--print( "two balls just touched with the colour: " .. object1.colour)
+		timer.performWithDelay(1, startSearch(object1, object2), 1)
 	end
 end
 
@@ -267,6 +242,86 @@ function startRotation( event )
 		for i=1, #centreBalls do
 			local target = centreBalls[i].currentAngle + (360 / dof)
 			centreBalls[i].targetAngle = target
+		end
+	end
+end
+
+local tPrevious = system.getTimer()
+local tComplexPrevious = system.getTimer()
+local tLastNewBall = system.getTimer()
+
+function animate( event )
+
+	local tDelta = event.time - tPrevious
+	tPrevious = event.time
+
+	if (start) then
+		-- wait until start splash screen is done
+		tPrevious = event.time
+		tComplexPrevious = event.time
+		return true
+	end
+
+	local oneAngle = 360 / dof
+	local fadeRate = 1 - (tDelta * 0.5)
+	local updateCentreBalls = false
+	local removalBalls = {}
+	local newCentreBalls = {}
+   
+	for i=1, #centreBalls do
+		if (centreBalls[i].alpha > lowAlpha) then
+			centreBalls[i]:setLinearVelocity(0, 0)
+			local distanceFromTarget = centreBalls[i].targetAngle - centreBalls[i].currentAngle
+			if (distanceFromTarget < 3) then
+				distanceFromTarget = 2
+			end
+			local dampingFactorFromTarget = distanceFromTarget / oneAngle
+			local move = centreBalls[i].currentAngle + (tDelta * 0.0025 * oneAngle * dampingFactorFromTarget)
+	
+			local xV = Cx - centreBalls[i].x
+			local yV = Cy - centreBalls[i].y
+			local radiusFromCentre =  math.sqrt( (xV ^ 2) + (yV ^ 2) )
+			centreBalls[i].x = (Cx)  + math.cos(math.rad(move)) * radiusFromCentre 
+			centreBalls[i].y = (Cy)  + math.sin(math.rad(move)) * radiusFromCentre
+			centreBalls[i].rotation = move
+			centreBalls[i].currentAngle = move
+			centreBalls[i]:setLinearVelocity( xV * 0.05 ,  yV * 0.05 ) -- bit of force to centre
+			targetLeft = centreBalls[i].targetAngle - centreBalls[i].currentAngle
+
+			newCentreBalls[#newCentreBalls+1] = centreBalls[i]
+		else
+			--needs removing
+			removalBalls[#removalBalls+1] = centreBalls[i]
+			updateCentreBalls = true
+		end
+    end
+
+    if (updateCentreBalls) then
+    	print( "updatingCentreBalls old=" .. #centreBalls .. " new=" .. #newCentreBalls .. "due to remove=" .. #removalBalls)
+    	
+    	centreBalls = newCentreBalls
+
+    	for i=1, #removalBalls do
+    		removalBalls[i]:removeSelf()
+    		removalBalls[i] = nil
+    	end
+    end
+
+	-- only do this periodically as intensive
+	if ( event.time - tComplexPrevious > (100) ) then
+		-- check game over
+		if (isGameOver()) then
+			print( "GAME OVER!" )
+			gameOver()
+		end
+
+
+		if ( event.time - tLastNewBall > (2000) ) then
+			tLastNewBall = event.time
+			--new ball please
+			newFreeBall()
+			-- cleanup freeballs that are off screen
+			cleanUpBalls()
 		end
 	end
 end
