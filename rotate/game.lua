@@ -338,6 +338,8 @@ local function animate( event )
     if (updateCentreBalls) then
     	print( "updatingCentreBalls old=" .. #centreBalls .. " new=" .. #newCentreBalls .. "due to remove=" .. #removalBalls)
     	centreBalls = newCentreBalls
+    	scoreTotal = scoreTotal + #removalBalls
+    	updateScores()   
     	for i=1, #removalBalls do
     		removeBall(removalBalls[i])
     	end
