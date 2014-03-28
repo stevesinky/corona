@@ -22,7 +22,7 @@ function scene:createScene(event)
 	local title = utility.addBlackCentredTextWithFont("ROTATE",-190,screenGroup,100,"Exo-DemiBoldItalic")
 	utility.setColour(title, 175, 0, 175)
 
-	layText = utility.addCentredText("PLAY", 0,screenGroup,50,"Exo-DemiBoldItalic")	
+	playText = utility.addCentredText("PLAY", 0,screenGroup,50,"Exo-DemiBoldItalic")	
 	utility.setColour(playText, 175, 0, 175)
 
 	transition.to ( title,{ time= 200, x = (title.x),y = (title.y + 200) } ) 
