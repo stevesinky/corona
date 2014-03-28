@@ -4,7 +4,8 @@ application =
 	{ 
 		width = 768,
 		height = 1024, 
-		scale = "letterBox"
+		scale = "letterBox",
+		fps = 60
 
 	}
 }
