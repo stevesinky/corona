@@ -16,7 +16,8 @@ local playText
 -- what to do when the screen loads
 function scene:createScene(event)
 	local screenGroup = self.view
-	background = 0 
+	background = display.newImageRect("background.png", 1080, 1920)
+	utility.putInCentre(background)  
 
 	local title = utility.addBlackCentredTextWithFont("ROTATE",-190,screenGroup,100,"Exo-DemiBoldItalic")
 	utility.setColour(title, 175, 0, 175)
