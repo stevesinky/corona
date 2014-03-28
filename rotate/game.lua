@@ -88,8 +88,7 @@ function scene:createScene(event)
 	utility.putInCentre(background)
 
 	score = display.newText( scoreTotal, 0, 0, native.systemFontBold, 28 )
-	score:setTextColor( 40, 40, 40, 0 )
-	score.x = 20; score.y = 20
+	score:setTextColor( 255, 40, 40 )
 
 	start = true
 	targetLeft = 0 --used for when a ball becomes central mid turn, can then inherit this tagert
