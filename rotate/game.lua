@@ -73,7 +73,7 @@ local function newFreeBall()
 		freeNo = math.random( 8 )
 	end
 	local freeBall = newBall( freeNo )
-	freeBall.x = math.random(Cx * 0.75, Cy * 1.25)
+	freeBall.x = math.random(Cx * 0.75, Cx * 1.25)
 	freeBall.y = -8
 	physics.addBody( freeBall, ballBody )
 	freeBall:applyLinearImpulse( 0, 35.0, freeBall.x, freeBall.y )
