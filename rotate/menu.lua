@@ -49,7 +49,7 @@ local function newBall( i )
 	ball:scale( scaler, scaler )
 	ball.id = "ball" -- store object type as string attribute
 	ball.colour = ballColours[i] -- store ball colour as string attribute
-	ball.alpha = 1
+	ball.alpha = 0.3
 	return ball
 end
 
@@ -59,7 +59,7 @@ local function newFreeBall()
 		freeNo = math.random( 8 )
 	end
 	local freeBall = newBall( freeNo )
-	freeBall.x = math.random(Cx * 0.8, Cx * 1.2)
+	freeBall.x = math.random(Cx * 0.4, Cx * 1.6)
 	freeBall.y = -8
 	physics.addBody( freeBall, ballBody )
 	freeBall:applyLinearImpulse( 0, 35.0, freeBall.x, freeBall.y )
