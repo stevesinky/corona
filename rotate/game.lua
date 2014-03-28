@@ -64,7 +64,6 @@ local function newBall( i )
 	ball.id = "ball" -- store object type as string attribute
 	ball.colour = ballColours[i] -- store ball colour as string attribute
 	ball.alpha = 1
-	ball.remove = 0 
 	return ball
 end
 
