@@ -19,20 +19,18 @@ local W = display.contentWidth
 local H = display.contentHeight
 local Cx = W * 0.5
 local Cy = H * 0.5
-local scaler = 0.5
-local radius = 64
-local actualRadius = radius * scaler
+local radius = 64 -- constant on image
 local level = 1
 local lowAlpha = 0.01
 local scoreTotal = 0
-local ballBody = { density=2.0, friction=10.0, bounce=0.1, radius=actualRadius }
-local ballColours = { "black", "blue", "red", "green", "gold", "blue", "gold", "red", "green" }
+local ballColours = { "blue", "red", "green", "gold", "blue", "gold", "red", "black", "green" }
 
 -- variables
 local background
 local start
 local targetLeft
 local dof
+local held
 local numberToScore
 local score
 local tPrevious
@@ -40,10 +38,10 @@ local tComplexPrevious
 local tLastNewBall
 local freeBalls
 local centreBalls
-
-local function updateScores()
-	score.text = scoreTotal
-end
+local isGameOver
+local timerBar
+local timerBarText
+local levelTime
 
 local function getAngle( ball )
 	local arcx = ball.x - Cx
@@ -58,12 +56,13 @@ local function setBallCurrentAngle( ball )
 	ball.targetAngle = angleToDeg
 end
 
-local function newBall( i )
-	local ball = display.newImage( "ball_" .. ballColours[i] .. ".png" )
+local function newBall( i, scaler )
+	local ball = display.newImage( "ball_" .. ballColours[i] .. "_f.png" )
 	ball:scale( scaler, scaler )
 	ball.id = "ball" -- store object type as string attribute
 	ball.colour = ballColours[i] -- store ball colour as string attribute
 	ball.alpha = 1
+	ball.actualRadius = radius * scaler
 	return ball
 end
 
@@ -72,11 +71,17 @@ local function newFreeBall()
 	if (freeNo > 9) then
 		freeNo = math.random( 8 )
 	end
-	local freeBall = newBall( freeNo )
+	local scale = 0.55
+	if (math.fmod(freeNo, 3) == 0 ) then
+		scale = math.random(5, 6) * 0.11
+	end
+
+	local freeBall = newBall( freeNo, scale )
 	freeBall.x = math.random(Cx * 0.75, Cx * 1.25)
 	freeBall.y = -8
+	local ballBody = { density=2.0, friction=1.0, bounce=0.1, radius=freeBall.actualRadius }
 	physics.addBody( freeBall, ballBody )
-	freeBall:applyLinearImpulse( 0, 35.0, freeBall.x, freeBall.y )
+	freeBall:applyLinearImpulse( 0, (60.0 * scale), freeBall.x, freeBall.y )
 	freeBalls[freeNo] = freeBall	
 end
 
@@ -87,14 +92,21 @@ function scene:createScene(event)
 	background = display.newImageRect("background.png", 1080, 1920)
 	utility.putInCentre(background)
 
-	score = display.newText( scoreTotal, 0, 0, native.systemFontBold, 28 )
-	score:setTextColor( 255, 40, 40 )
+	score = display.newText( scoreTotal, 40, -120, native.systemFontBold, 32 )
+	utility.setColour(score, 0, 0, 0)
+
+	timerBar = display.newRect( W / 2, H + 120, W - 64, 32 )
+	utility.setColour(timerBar, 175, 0, 175)
+
+	timerBarText = display.newText( "TIME", W / 2, H + 120, native.systemFontBold, 32 )
+	utility.setColour(timerBarText, 0, 0, 0)
 
 	start = true
 	targetLeft = 0 --used for when a ball becomes central mid turn, can then inherit this tagert
 	level = level + 1
-	dof = 4
+	dof = 5
 	numberToScore = 3
+	levelTime = 40000
 
 	tPrevious = system.getTimer()
 	tComplexPrevious = system.getTimer()
@@ -103,13 +115,16 @@ function scene:createScene(event)
 	freeBalls = {}
 	centreBalls = {}
 
+	isGameOver = false
+
 	-- Arrange stating balls at centre
 	local startCentreSize = 4
 	for i = 1, startCentreSize do
-		centreBalls[i] = newBall( i )
+		centreBalls[i] = newBall( i, 0.5 )
 		centreBalls[i].x = Cx + (centreBalls[i].width * centreBalls[i].xScale * i) - centreBalls[i].width * centreBalls[i].xScale * 2.5
 		centreBalls[i].y = Cy 
 		setBallCurrentAngle(centreBalls[i])
+		local ballBody = { density=2.0, friction=10.0, bounce=0.1, radius=centreBalls[i].actualRadius }
 		physics.addBody( centreBalls[i], ballBody )
 	end
 end
@@ -121,29 +136,27 @@ local function gameOver()
 end
 
 local function isBallOffScreen(ball)
-	local buffer = 4
+	local buffer = radius * 4
 	if (ball.x < (0 - buffer)) then
 		return true
 	end
-	if (ball.x > (W + buffer) then
+	if (ball.x > (W + buffer)) then
 		return true
 	end
 	if (ball.y < (0 - buffer)) then
 		return true
 	end
-	if (ball.y > (H + buffer) then
+	if (ball.y > (H + buffer)) then
 		return true
 	end
 end
 
 local function isGameOver()
 	-- check all obeject in centre group
-	for i = 1, #centreBalls do
-		if (isBallOffScreen(centreBalls[i])) then
-			return true
-		end
+	if (timerBar.width < 2) then
+		return true
 	end
-    return false
+	return false
 end
 
 local function removeBall(ball)
@@ -154,9 +167,9 @@ end
 local function cleanUpBalls()
 	--if way off screen, remove image/physics
 	-- check all obeject in centre group
-	for i = 1, #freeballs do
-		if (isBallOffScreen(freeballs[i])) then
-			removeBall(freeballs[i])
+	for i = 1, #freeBalls do
+		if (isBallOffScreen(freeBalls[i])) then
+			removeBall(freeBalls[i])
 		end
 	end
 end
@@ -182,10 +195,14 @@ end
 
 local function ballIsTouchingAndSameColour(ball1, ball2)
 	if (ball1.colour == ball2.colour) then
+		if (ball1.colour == "black") then
+			return false;
+		end
+
 		--print("balls are same colour:" .. ball1.colour)
 		local dx = math.abs(ball1.x - ball2.x)
 		local dy = math.abs(ball1.y - ball2.y)
-		local tolerance = actualRadius * 2 
+		local tolerance = ball1.actualRadius + ball2.actualRadius 
 		--print("dx="..dx.." dy="..dy.." tol="..tolerance)
 		if (dx <= tolerance) then
 			if (dy <= tolerance) then
@@ -274,7 +291,7 @@ local function onCollision( event )
 end
 
 
-local function startRotation( event )
+local function myTapListener( event )
 	if (start == true) then
 		start = false
 		for i=1, #centreBalls do
@@ -288,16 +305,46 @@ local function startRotation( event )
 	end
 end
 
+local function myTouchListener( event )
+
+	myTapListener( event )
+
+    if ( event.phase == "began" ) then
+        --code executed when the button is touched
+        held = true
+    elseif ( event.phase == "ended" ) then
+        --code executed when the touch lifts off the object
+        held = false
+    end
+    return true  --prevents touch propagation to underlying objects
+end
+
+local function updateTimer( elapsedTime )
+	local timeRatio = levelTime / elapsedTime
+	local scaleX = W / timeRatio
+	timerBar.width = timerBar.width - scaleX
+end
+
 local function animate( event )
 
 	local tDelta = event.time - tPrevious
 	tPrevious = event.time
 
-	if (start) then
+	updateTimer(tDelta)
+
+	if (isGameOver == true) then
+		return true
+	end
+
+	if (start == true) then
 		-- wait until start splash screen is done
 		tPrevious = event.time
 		tComplexPrevious = event.time
 		return true
+	end
+
+	if (held == true) then
+		myTapListener(event)
 	end
 
 	local oneAngle = 360 / dof
@@ -338,7 +385,8 @@ local function animate( event )
     	print( "updatingCentreBalls old=" .. #centreBalls .. " new=" .. #newCentreBalls .. "due to remove=" .. #removalBalls)
     	centreBalls = newCentreBalls
     	scoreTotal = scoreTotal + #removalBalls
-    	updateScores()   
+    	score.text = scoreTotal
+    	timerBar.width = timerBar.width + (W * 0.1 * #removalBalls)    	   
     	for i=1, #removalBalls do
     		removeBall(removalBalls[i])
     	end
@@ -349,6 +397,7 @@ local function animate( event )
 		-- check game over
 		if (isGameOver()) then
 			print( "GAME OVER!" )
+			isGameOver = true
 			gameOver()
 		end
 
@@ -358,7 +407,7 @@ local function animate( event )
 			--new ball please
 			newFreeBall()
 			-- cleanup freeballs that are off screen
-			cleanUpBalls()
+			--cleanUpBalls() doesn't work
 		end
 	end
 end
@@ -367,14 +416,16 @@ end
 function scene:enterScene(event)
 	print("enter game")
 	Runtime:addEventListener( "enterFrame", animate )
-	Runtime:addEventListener( "touch", startRotation )
+	Runtime:addEventListener( "tap", myTapListener )
+	Runtime:addEventListener( "touch", myTouchListener )
 	Runtime:addEventListener( "collision", onCollision )
 	storyboard.purgeScene("menu")	
 end
 
 function scene:exitScene(event)
 	Runtime:removeEventListener( "enterFrame", animate )
-	Runtime:removeEventListener( "touch", startRotation )
+	Runtime:removeEventListener( "tap", myTapListener )
+	Runtime:removeEventListener( "touch", myTapListener )
 	Runtime:removeEventListener( "collision", onCollision )
 end
 
